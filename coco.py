@@ -49,19 +49,18 @@ from config import Config
 import utils
 import model as modellib
 
-# Root directory of the project
+# 專案的根目錄
 ROOT_DIR = os.getcwd()
 
-# Path to trained weights file
+# MS Coco資料集MASK-RCNN預訓練模型的權重文件路徑
 COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 
-# Directory to save logs and model checkpoints, if not provided
-# through the command line argument --logs
+# 如果沒有通過命令行參數--logs提供保存日誌和模型檢查點的目錄則使用預設的路徑
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 DEFAULT_DATASET_YEAR = "2014"
 
 ############################################################
-#  Configurations
+#  設定
 ############################################################
 
 

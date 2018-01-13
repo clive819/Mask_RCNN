@@ -1,10 +1,10 @@
-# Mask R-CNN for Object Detection and Segmentation
+# Mask R-CNN 對象檢測(Object Detection)和分割(Segmentation)
 
-This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on Python 3, Keras, and TensorFlow. The model generates bounding boxes and segmentation masks for each instance of an object in the image. It's based on Feature Pyramid Network (FPN) and a ResNet101 backbone.
+這是基於Python 3，Keras和TensorFlow上對[Mask R-CNN](https://arxiv.org/abs/1703.06870)的實現。 這個模型會為圖像中的每個對象實例生成邊界框和分割遮罩。 它根基於特徵金字塔網絡（FPN）和ResNet101的backbone。
 
 ![Instance Segmentation Sample](assets/street.png)
 
-The repository includes:
+這個repository包括了:
 * Source code of Mask R-CNN built on FPN and ResNet101.
 * Training code for MS COCO
 * Pre-trained weights for MS COCO
@@ -33,8 +33,7 @@ It includes code to run object detection and instance segmentation on arbitrary 
 * ([model.py](model.py), [utils.py](utils.py), [config.py](config.py)): These files contain the main Mask RCNN implementation. 
 
 
-* [inspect_data.ipynb](/inspect_data.ipynb). This notebook visualizes the different pre-processing steps
-to prepare the training data.
+* [inspect_data.ipynb](/inspect_data.ipynb). 這個筆記本將如何準備訓練圖像數據集時不同的步驟預處理程序以視覺化的方式來示範。
 
 * [inspect_model.ipynb](/inspect_model.ipynb) This notebook goes in depth into the steps performed to detect and segment objects. It provides visualizations of every step of the pipeline.
 
