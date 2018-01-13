@@ -50,10 +50,9 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
 
 
 def random_colors(N, bright=True):
-    """
-    Generate random colors.
-    To get visually distinct colors, generate them in HSV space then
-    convert to RGB.
+    """生成隨機顏色
+    
+    為了視覺上有著不同的顏色，在HSV空間中生成顏色再轉換成RGB
     """
     brightness = 1.0 if bright else 0.7
     hsv = [(i / N, 1, brightness) for i in range(N)]
@@ -63,9 +62,15 @@ def random_colors(N, bright=True):
 
 
 def apply_mask(image, mask, color, alpha=0.5):
-    """Apply the given mask to the image.
+    """疊加遮罩到原始圖像上
+
+    參數:
+        image: 原始的圖像
+        mask: 物件個體的遮罩
+        color: 要展示的顏色 (RGB -> tutple(0,0,0))
+        alpha: 透明度 (預設為0.5)
     """
-    for c in range(3):
+    for c in range(3): # 對每個圖像channel進行迭代
         image[:, :, c] = np.where(mask == 1,
                                   image[:, :, c] *
                                   (1 - alpha) + alpha * color[c] * 255,
@@ -76,15 +81,18 @@ def apply_mask(image, mask, color, alpha=0.5):
 def display_instances(image, boxes, masks, class_ids, class_names,
                       scores=None, title="",
                       figsize=(16, 16), ax=None):
-    """
-    boxes: [num_instance, (y1, x1, y2, x2, class_id)] in image coordinates.
-    masks: [height, width, num_instances]
-    class_ids: [num_instances]
-    class_names: list of class names of the dataset
-    scores: (optional) confidence scores for each box
-    figsize: (optional) the size of the image.
-    """
-    # Number of instances
+    """視覺展示每個被偵測出來的物件個體
+
+    參數:
+        image: 原始的圖像
+        boxes: [num_instance, (y1, x1, y2, x2)] in image coordinates.
+        masks: [height, width, num_instances] 每個被偵測出來的物件個體的遮罩
+        class_ids: [num_instances] 每個被偵測出來的物件個體的圖像類別ID
+        class_names: 數據集的圖像類別名稱列表
+        scores: (optional) confidence scores for each box
+        figsize: (optional) the size of the image.
+    """    
+    # 有多少被偵測出來的物件個體(instances)
     N = boxes.shape[0]
     if not N:
         print("\n*** No instances to display *** \n")
@@ -93,46 +101,59 @@ def display_instances(image, boxes, masks, class_ids, class_names,
 
     if not ax:
         _, ax = plt.subplots(1, figsize=figsize)
-
-    # Generate random colors
+    
+    # 生成隨機顏色
     colors = random_colors(N)
 
-    # Show area outside image boundaries.
-    height, width = image.shape[:2]
+    # 設定圖像的顯示區域範圍(+-10)。
+    height, width = image.shape[:2] # 取得原圖像的高與寬
     ax.set_ylim(height + 10, -10)
     ax.set_xlim(-10, width + 10)
     ax.axis('off')
     ax.set_title(title)
 
+    # 複製原始圖像疊加遮罩圖像
     masked_image = image.astype(np.uint32).copy()
-    for i in range(N):
-        color = colors[i]
 
-        # Bounding box
+    # 迭代每一個偵測出來的物件個體
+    for i in range(N):
+        color = colors[i] # 取得顏色
+
+        # 畫出邊界框 (Bounding box)
         if not np.any(boxes[i]):
             # Skip this instance. Has no bbox. Likely lost in image cropping.
             continue
+        # 取得偵測出來的邊界框坐標
         y1, x1, y2, x2 = boxes[i]
+
+        # 根據邊界框坐標在圖像上畫出一個長方形
         p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
                               alpha=0.7, linestyle="dashed",
                               edgecolor=color, facecolor='none')
+        # 把邊界框疊加到原圖像上
         ax.add_patch(p)
 
-        # Label
+        # 取得圖像ID
         class_id = class_ids[i]
+        # 取得信心分數
         score = scores[i] if scores is not None else None
+        # 取得圖像類別名稱
         label = class_names[class_id]
+        # 計算出要打印資訊的坐標
         x = random.randint(x1, (x1 + x2) // 2)
         caption = "{} {:.3f}".format(label, score) if score else label
+        # 把物件個體的類別名稱及信心分數疊加到原圖像上
         ax.text(x1, y1 + 8, caption,
                 color='w', size=11, backgroundcolor="none")
 
-        # Mask
+        # 取得物件個體的遮罩資訊
         mask = masks[:, :, i]
+
+        # 疊加遮罩圖像到原始圖像上
         masked_image = apply_mask(masked_image, mask, color)
 
-        # Mask Polygon
-        # Pad to ensure proper polygons for masks that touch image edges.
+        # 遮罩外框多邊形 (Mask Polygon)
+        # 進行填充以確保遮罩外框剛好包住遮罩
         padded_mask = np.zeros(
             (mask.shape[0] + 2, mask.shape[1] + 2), dtype=np.uint8)
         padded_mask[1:-1, 1:-1] = mask
