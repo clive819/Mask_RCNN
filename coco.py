@@ -65,71 +65,87 @@ DEFAULT_DATASET_YEAR = "2014"
 
 
 class CocoConfig(Config):
-    """Configuration for training on MS COCO.
+    """用來訓練MS COCO圖像資料集的Configuration類別
+
     Derives from the base Config class and overrides values specific
     to the COCO dataset.
+    繼承自基礎Config類別，為MS COCO圖像資料集來覆寫某些設定的值
     """
     # Give the configuration a recognizable name
+    # 給配置一個可識別的名字
     NAME = "coco"
 
-    # We use a GPU with 12GB memory, which can fit two images.
-    # Adjust down if you use a smaller GPU.
+    # 在每個GPU上訓練的圖像數量。一個有12GB記憶體的GPU通常可以
+    # 處理2張1024x1024像素的圖片。
+    # 根據你的GPU記憶體和圖像大小進行調整。使用GPU可以處理的最大數字以獲得最佳性能。
     IMAGES_PER_GPU = 2
 
     # Uncomment to train on 8 GPUs (default is 1)
     # GPU_COUNT = 8
 
-    # Number of classes (including background)
+    # 圖像類別的數量(包括背景)
+    # 在MS COCO圖像資料集裡定義了80種圖像類別, 同時我們再加上"BG"(背景)的類別
     NUM_CLASSES = 1 + 80  # COCO has 80 classes
 
 
 ############################################################
-#  Dataset
+#  Dataset (繼承utils.Dataset)
 ############################################################
 
 class CocoDataset(utils.Dataset):
     def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
                   class_map=None, return_coco=False, auto_download=False):
-        """Load a subset of the COCO dataset.
-        dataset_dir: The root directory of the COCO dataset.
-        subset: What to load (train, val, minival, valminusminival)
-        year: What dataset year to load (2014, 2017) as a string, not an integer
-        class_ids: If provided, only loads images that have the given classes.
-        class_map: TODO: Not implemented yet. Supports maping classes from
-            different datasets to the same class ID.
-        return_coco: If True, returns the COCO object.
-        auto_download: Automatically download and unzip MS-COCO images and annotations
+        """加載COCO數據集的一個子集
+
+        參數:
+            dataset_dir (string): The root directory of the COCO dataset.
+            subset (string): 要載入那一個子集的資料 (train, val, minival, valminusminival)
+            year (string): 那一年份的MS COCO資料集 (2014, 2017)
+            class_ids (list): 只加載給定圖像類別的圖像
+            class_map: TODO: Not implemented yet. Supports maping classes from
+                different datasets to the same class ID.
+            return_coco: 如果return_coco為True, 那麼把COCO的API類別實例返回
+            auto_download: 是否自動下載和​​解壓縮MS-COCO圖像和註釋
+        返回:
+            coco: COCO的API類別實例
         """
 
         if auto_download is True:
             self.auto_download(dataset_dir, subset, year)
 
+        # 創建COCO api的COCO類別實例
         coco = COCO("{}/annotations/instances_{}{}.json".format(dataset_dir, subset, year))
         if subset == "minival" or subset == "valminusminival":
             subset = "val"
         image_dir = "{}/{}{}".format(dataset_dir, subset, year)
 
         # Load all classes or a subset?
+        # 載入所有的圖像類別或特定圖像類別的子集
         if not class_ids:
-            # All classes
+            # 從COCO API中取出所有圖像類別
             class_ids = sorted(coco.getCatIds())
 
         # All images or a subset?
+        # 載入所有的圖像或特定圖像類別的圖像
         if class_ids:
             image_ids = []
             for id in class_ids:
                 image_ids.extend(list(coco.getImgIds(catIds=[id])))
             # Remove duplicates
+            # 移除重覆
             image_ids = list(set(image_ids))
         else:
             # All images
+            # 所有的圖像
             image_ids = list(coco.imgs.keys())
 
         # Add classes
+        # 將COCO的圖像類別轉換成內部圖像類別
         for i in class_ids:
             self.add_class("coco", i, coco.loadCats(i)[0]["name"])
 
         # Add images
+        # 將COCO的圖像轉換成內部圖像
         for i in image_ids:
             self.add_image(
                 "coco", image_id=i,
@@ -138,6 +154,7 @@ class CocoDataset(utils.Dataset):
                 height=coco.imgs[i]["height"],
                 annotations=coco.loadAnns(coco.getAnnIds(
                     imgIds=[i], catIds=class_ids, iscrowd=None)))
+
         if return_coco:
             return coco
 
@@ -213,36 +230,63 @@ class CocoDataset(utils.Dataset):
             print("... done unzipping")
         print("Will use annotations in " + annFile)
 
+    # 因應MS COCO的遮罩api來覆寫load_mask方法
     def load_mask(self, image_id):
-        """Load instance masks for the given image.
+        """加載給定圖像的實例遮罩。
 
-        Different datasets use different ways to store masks. This
-        function converts the different mask format to one format
-        in the form of a bitmap [height, width, instances].
+        不同的圖像數據集使用不同的方式來存儲遮罩(Mask)。覆寫這個method來載入實例遮罩
+        並以二進制遮罩數組形式來回傳: shape [height, width, instances count]。
 
-        Returns:
-        masks: A bool array of shape [height, width, instance count] with
-            one mask per instance.
-        class_ids: a 1D array of class IDs of the instance masks.
+        參數:
+            image_id (string): 圖像ID
+
+        返回:
+            masks: 一個對於每一個圖像實例的二元(每個像素點的值為0或1)遮罩的陣列
+                   shape [height, width, instance count]
+            class_ids: 實例遮罩的一個圖像類別1D陣列。
         """
         # If not a COCO image, delegate to parent class.
+        # 如果不是COCO資料集的圖像則交由父類別來處理
         image_info = self.image_info[image_id]
         if image_info["source"] != "coco":
             return super(CocoDataset, self).load_mask(image_id)
 
-        instance_masks = []
-        class_ids = []
+        instance_masks = [] # [height, width, instance_idx]
+        class_ids = []      # [instance's classId]
+
+        # 取出MS COCO對於一個特定圖像的物件標註資訊(1對多)
         annotations = self.image_info[image_id]["annotations"]
+
         # Build mask of shape [height, width, instance_count] and list
         # of class IDs that correspond to each channel of the mask.
+        # 構建實例遮罩陣列 -> mask of shape [height, width, instance_count]與
+        # 實例遮罩的一個圖像類別1D陣列 -> [instance's classId]
+
+        # 在MS COCO中一個圖像會包含多個物件instance的標註(annotation), 以下是單一個標註的spec:
+        #   annotation{
+        #       "id" : int, 
+        #       "image_id" : int, 
+        #       "category_id" : int, 
+        #       "segmentation" : RLE or [polygon], 
+        #       "area" : float, 
+        #       "bbox" : [x,y,width,height], 
+        #       "iscrowd" : 0 or 1,
+        #   }
+
+        # 迭代每一個標註
         for annotation in annotations:
+            # 取得內部的圖像類別ID
             class_id = self.map_source_class_id(
                 "coco.{}".format(annotation['category_id']))
+            
             if class_id:
+                # 取得標註的遮罩
                 m = self.annToMask(annotation, image_info["height"],
                                    image_info["width"])
+
                 # Some objects are so small that they're less than 1 pixel area
                 # and end up rounded out. Skip those objects.
+                # 有些物件太小了(< 1 像素區域面積)就忽略
                 if m.max() < 1:
                     continue
                 # Is it a crowd? If so, use a negative class ID.
@@ -276,9 +320,7 @@ class CocoDataset(utils.Dataset):
     # The following two functions are from pycocotools with a few changes.
 
     def annToRLE(self, ann, height, width):
-        """
-        Convert annotation which can be polygons, uncompressed RLE to RLE.
-        :return: binary mask (numpy 2D array)
+        """將可能是多邊形(polygons)，未壓縮的RLE的註釋轉換成RLE。
         """
         segm = ann['segmentation']
         if isinstance(segm, list):
@@ -295,11 +337,35 @@ class CocoDataset(utils.Dataset):
         return rle
 
     def annToMask(self, ann, height, width):
+        """將可能是多邊形(polygons)，未壓縮的RLE或RLE的註釋轉換成二進制遮罩。
+
+        在MS COCO中一個圖像會包含多個物件instance的標註(annotation), 以下是單一個標註的spec:
+           annotation{
+               "id" : int, 
+               "image_id" : int, 
+               "category_id" : int, 
+               "segmentation" : RLE or [polygon], 
+               "area" : float, 
+               "bbox" : [x,y,width,height], 
+               "iscrowd" : 0 or 1,
+           }
+
+        參數:
+            ann (MS COCO annotation實例)
+            height (int): 圖像的高
+            width (int): 圖像的寬
+        返回:
+            二進制遮罩 (numpy 2D array) -> [height, width] 每個像素值為True/False
+                                          比如:一個3x3的binary mask
+
+                                          |False, False, False|    |xxx|
+                                          |False, True , False| -> |xox|
+                                          |True , True , False|    |oox|
         """
-        Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
-        :return: binary mask (numpy 2D array)
-        """
+        
+        # 把annotation中的遮罩都先轉換成RLE格式
         rle = self.annToRLE(ann, height, width)
+        # 用MS COCO的api來解碼RLE成二進制遮罩
         m = maskUtils.decode(rle)
         return m
 

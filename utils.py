@@ -207,13 +207,15 @@ def box_refinement(box, gt_box):
 
 
 ############################################################
-#  Dataset
+#  Dataset (圖像資料集的抽象類別)
 ############################################################
 
 class Dataset(object):
     """The base class for dataset classes.
     To use it, create a new class that adds functions specific to the dataset
     you want to use. For example:
+    要使用它，繼承它產生一個子類別，並根據特定圖像數據集來覆寫一些，添加特定於數據集的函數
+    你想使用。例如：
 
     class CatsAndDogsDataset(Dataset):
         def load_cats_and_dogs(self):
@@ -231,16 +233,27 @@ class Dataset(object):
         self.image_info = []
         # Background is always the first class
         self.class_info = [{"source": "", "id": 0, "name": "BG"}]
-        self.source_class_ids = {}
+        self.source_class_ids = {} # 原本圖像類別的類別ID
 
     def add_class(self, source, class_id, class_name):
+        """增加圖像類別ID與名稱
+
+        參數:
+            source (string): 圖像類別的來源
+            class_id (int): 圖像類別ID
+            class_name (string): 圖像類別名稱
+        """
         assert "." not in source, "Source name cannot contain a dot"
         # Does the class exist already?
+        # 這個圖像類別己經存在了嗎?
         for info in self.class_info:
             if info['source'] == source and info["id"] == class_id:
                 # source.class_id combination already available, skip
+                # 如果 (source,class_id)的組合己經存在的話就忽略
                 return
+
         # Add the class
+        # 增加這個圖像類別
         self.class_info.append({
             "source": source,
             "id": class_id,
@@ -248,65 +261,93 @@ class Dataset(object):
         })
 
     def add_image(self, source, image_id, path, **kwargs):
+        """增加一個圖像
+
+        參數:
+            source (string): 圖像類別的來源
+            image_id (string): 圖像ID
+            path (string): 圖像檔案路徑
+        """
         image_info = {
             "id": image_id,
             "source": source,
             "path": path,
         }
-        image_info.update(kwargs)
+        image_info.update(kwargs) # 把其它metadata也加進來
         self.image_info.append(image_info)
 
     def image_reference(self, image_id):
-        """Return a link to the image in its source Website or details about
-        the image that help looking it up or debugging it.
+        """返回源網站中圖片的鏈接或有關詳細信息,有助於查找或調試的圖像。
 
-        Override for your dataset, but pass to this function
-        if you encounter images not in your dataset.
+        參數:
+            image_id (string): 圖像ID
+
+        返回:
+            image_url (string): 圖像的鏈結
         """
         return ""
 
     def prepare(self, class_map=None):
-        """Prepares the Dataset class for use.
+        """準備Dataset類別以供使用。
+
+        在Dataset的實例要被使用前, 都要先呼叫這個方法來確保一些初始化的動作可以正確完成。
 
         TODO: class map is not supported yet. When done, it should handle mapping
               classes from different datasets to the same class ID.
         """
         def clean_name(name):
-            """Returns a shorter version of object names for cleaner display."""
+            """返回更簡潔/簡短的圖像物件名稱，以便更清晰地顯示。"""
             return ",".join(name.split(",")[:1])
 
         # Build (or rebuild) everything else from the info dicts.
-        self.num_classes = len(self.class_info)
-        self.class_ids = np.arange(self.num_classes)
-        self.class_names = [clean_name(c["name"]) for c in self.class_info]
-        self.num_images = len(self.image_info)
-        self._image_ids = np.arange(self.num_images)
+        self.num_classes = len(self.class_info) # 計算圖像類別的個數
+        self.class_ids = np.arange(self.num_classes) # 產生一組連續的圖像類別ID
+        self.class_names = [clean_name(c["name"]) for c in self.class_info] # 產生一組圖像類別的簡名
+        self.num_images = len(self.image_info) # 計算圖像的個數
+        self._image_ids = np.arange(self.num_images) # 產生一組內部的圖像ID
 
+        # 產生內部圖像類別ID映射到原始圖像類別ID
         self.class_from_source_map = {"{}.{}".format(info['source'], info['id']): id
                                       for info, id in zip(self.class_info, self.class_ids)}
 
         # Map sources to class_ids they support
+        # 產生一個source映射到圖像類別id的字典
         self.sources = list(set([i['source'] for i in self.class_info]))
         self.source_class_ids = {}
-        # Loop over datasets
+        # 迭代整個資料集
         for source in self.sources:
             self.source_class_ids[source] = []
-            # Find classes that belong to this dataset
+            # 找出屬於某個"source"的圖像類別
             for i, info in enumerate(self.class_info):
                 # Include BG class in all datasets
+                # 把"BG(背景)"這個類別加到所有的資料集
                 if i == 0 or source == info['source']:
                     self.source_class_ids[source].append(i)
 
     def map_source_class_id(self, source_class_id):
-        """Takes a source class ID and returns the int class ID assigned to it.
+        """獲取source_class_id並返回分配給它的整數(int)的類別ID。
 
         For example:
         dataset.map_source_class_id("coco.12") -> 23
+
+        參數:
+            source_class_id (string): 圖像來源與類別ID的字串, 比如."coco.12"
+
+        返回:
+            類別ID (string): 原圖像集的類別ID
         """
         return self.class_from_source_map[source_class_id]
 
     def get_source_class_id(self, class_id, source):
-        """Map an internal class ID to the corresponding class ID in the source dataset."""
+        """取得內部圖像類別ID映射到源數據集中相對應的類ID。
+        
+        參數:
+            class_id (string): 圖像來源與類別ID的字串, 比如."coco.12"
+            source (string): 原圖像集名稱
+
+        返回:
+            類別ID (string): 內部的圖像集的類別ID
+        """
         info = self.class_info[class_id]
         assert info['source'] == source
         return info['id']
@@ -318,42 +359,59 @@ class Dataset(object):
                 self.external_to_class_id[ds + str(id)] = i
 
         # Map external image IDs to internal ones.
+        # 將外部圖像ID映射到內部圖像ID。
         self.external_to_image_id = {}
         for i, info in enumerate(self.image_info):
             self.external_to_image_id[info["ds"] + str(info["id"])] = i
 
     @property
     def image_ids(self):
+        """取得內部圖像的ID列表"""
         return self._image_ids
 
     def source_image_link(self, image_id):
-        """Returns the path or URL to the image.
-        Override this to return a URL to the image if it's availble online for easy
-        debugging.
+        """返回圖像的路徑或URL。
+        
+        如果可以網路獲取圖像，則覆寫此操作來返回圖像的URL以方便調試(debug)。
+
+        參數:
+            image_id (string): 圖像ID
+
+        返回:
+            image_url或image_path (string): 圖像的鏈結或檔案路徑
         """
         return self.image_info[image_id]["path"]
 
     def load_image(self, image_id):
-        """Load the specified image and return a [H,W,3] Numpy array.
+        """加載指定的圖像並返回一個[H，W，3] Numpy數組。
+
+        參數:
+            image_id (string): 圖像ID
+
+        返回:
+            image ([H，W，3] Numpy array): 圖像的資料
         """
-        # Load image
+        # 加載圖像
         image = skimage.io.imread(self.image_info[image_id]['path'])
-        # If grayscale. Convert to RGB for consistency.
+
+        # 如果是灰度圖像, 則轉換為RGB以保持一致。
         if image.ndim != 3:
             image = skimage.color.gray2rgb(image)
         return image
 
     def load_mask(self, image_id):
-        """Load instance masks for the given image.
+        """加載給定圖像的實例遮罩。
 
-        Different datasets use different ways to store masks. Override this
-        method to load instance masks and return them in the form of am
-        array of binary masks of shape [height, width, instances].
+        不同的圖像數據集使用不同的方式來存儲遮罩(Mask)。覆寫這個method來載入實例遮罩
+        並以二進制遮罩數組形式來回傳: shape [height, width, instances count]。
 
-        Returns:
-            masks: A bool array of shape [height, width, instance count] with
-                a binary mask per instance.
-            class_ids: a 1D array of class IDs of the instance masks.
+        參數:
+            image_id (string): 圖像ID
+
+        返回:
+            masks: 一個對於每一個圖像實例的二元(每個像素點的值為0或1)遮罩的陣列
+                   shape [height, width, instance count]
+            class_ids: 實例遮罩的一個圖像類別1D陣列。
         """
         # Override this function to load a mask from your dataset.
         # Otherwise, it returns an empty mask.

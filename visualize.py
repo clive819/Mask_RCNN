@@ -242,12 +242,15 @@ def draw_box(image, box, color):
 
 
 def display_top_masks(image, mask, class_ids, class_names, limit=4):
-    """Display the given image and the top few class masks."""
-    to_display = []
-    titles = []
+    """顯示給定的圖像和前幾個圖像類別的遮罩。"""
+    to_display = [] # 要展示的圖像 numpy array [height, width, channel]
+    titles = [] # 要展示的圖像的抬頭
+    # 原始圖像
     to_display.append(image)
     titles.append("H x W={}x{}".format(image.shape[0], image.shape[1]))
+
     # Pick top prominent classes in this image
+    # 挑選在這個圖像中最顯眼的類別罩遮
     unique_class_ids = np.unique(class_ids)
     mask_area = [np.sum(mask[:, :, np.where(class_ids == i)[0]])
                  for i in unique_class_ids]
